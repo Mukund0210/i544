@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "skipLibCheck": true,
     "rootDir": "src/",
     "outDir": "./dist",
     "allowJs": true,
@@ -16,7 +17,6 @@
     "declaration": true,
     "pretty": false,
     "noImplicitAny": true,
-    "declaration": true,
     "declarationMap": true,
     "strictNullChecks": true,
   },
