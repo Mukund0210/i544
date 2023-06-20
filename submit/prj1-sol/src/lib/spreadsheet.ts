@@ -1,6 +1,6 @@
 import {default as parse, CellRef, Ast } from './expr-parser.js';
 
-import { Result, okResult, errResult } from 'cs544-js-utils';
+import { Result, okResult, errResult, ErrResult } from 'cs544-js-utils';
 
 //factory method
 
@@ -29,8 +29,11 @@ export class Spreadsheet {
    *  to a suitable error message.
    */
   async eval(cellId: string, expr: string): Promise<Result<Updates>> {
+    
     try {
-      const value = eval(expr); // Evaluate the expression using the eval() function
+      const ast: Result<Ast> = parse(expr);
+      const value = evaluateAST(ast, cellId);
+ // Evaluate the expression using the eval() function
       if (typeof value !== 'number' || isNaN(value)) {
         throw new Error(); // Throw an error if the evaluated value is not a valid number
       }
@@ -39,7 +42,32 @@ export class Spreadsheet {
     } catch (error) {
       return errResult('SYNTAX', 'Invalid formula syntax'); // Return a syntax error if the expression is not a valid formula
     }
-  }  
+  }
+  
+  function evaluateAST(ast: Ast, baseCellId: string): number {
+    switch (ast.kind) {
+      case 'num':
+        return ast.value;
+      case 'app':
+        const args = ast.kids.map((kid) => evaluateAST(kid, baseCellId));
+        if (FNS.hasOwnProperty(ast.fn)) {
+          const fn = FNS[ast.fn];
+          return fn(...args);
+        }
+        throw new Error(`Unknown function: ${ast.fn}`);
+      case 'cell':
+        const cellRef: CellRef = CellRef.parse(ast.ref);
+        const referencedCellId = cellRef.toCellId(baseCellId);
+        if (spreadsheet.cells.hasOwnProperty(referencedCellId)) {
+          return spreadsheet.cells[referencedCellId];
+        }
+        return 0; // Return 0 for an unassigned cell
+      default:
+        throw new Error(`Invalid AST node kind: ${ast.kind}`);
+    }
+  }
+  
+  
 }
 
 const spreadsheet = new Spreadsheet('My Spreadsheet');
