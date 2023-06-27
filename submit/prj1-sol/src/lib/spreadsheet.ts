@@ -1,112 +1,6 @@
 import { default as parse, CellRef, Ast } from './expr-parser.js';
 import { Result, okResult, errResult } from 'cs544-js-utils';
 
-// Factory method
-export default async function makeSpreadsheet(name: string): Promise<Result<Spreadsheet>> {
-  return okResult(new Spreadsheet(name));
-}
-
-type Updates = { [cellId: string]: number };
-
-export class Spreadsheet {
-  readonly name: string;
-  private cells: Map<string, number>;
-  private dependencies: Map<string, Set<string>>;
-
-  constructor(name: string) {
-    this.name = name;
-    this.cells = new Map<string, number>();
-    this.dependencies = new Map<string, Set<string>>();
-  }
-
-  async eval(cellId: string, expr: string): Promise<Result<Updates>> {
-    try {
-      const ast: Ast = parse(expr);
-      const baseCellRef: CellRef = CellRef.parse(cellId);
-      const result = this.evaluateAST(ast, baseCellRef);
-      this.updateCells(cellId, result.updatedCells);
-      return okResult(result.updatedCells);
-    } catch (error) {
-      return errResult({ code: 'SYNTAX', message: error.message });
-    }
-  }
-
-  private evaluateAST(ast: Ast, baseCellRef: CellRef): EvaluationResult {
-    switch (ast.kind) {
-      case 'num':
-        return { value: ast.value, updatedCells: {} };
-      case 'app':
-        const fn = FNS[ast.fn];
-        const args = ast.kids.map((kid) => this.evaluateAST(kid, baseCellRef));
-        const argValues = args.map((arg) => arg.value);
-        const resultValue = fn(...argValues);
-        const updatedCells = args.reduce(
-          (acc, arg) => Object.assign(acc, arg.updatedCells),
-          {}
-        );
-        return { value: resultValue, updatedCells };
-      case 'cell':
-        const cellId = ast.toText(baseCellRef);
-        if (this.isCircularReference(baseCellRef, ast)) {
-          throw new Error('Circular reference detected');
-        }
-        const cellValue = this.cells.get(cellId) || 0;
-        return { value: cellValue, updatedCells: { [cellId]: cellValue } };
-      default:
-        throw new Error(`Unsupported AST kind: ${ast.kind}`);
-    }
-  }
-
-  private updateCells(baseCellId: string, updatedCells: Updates): void {
-    this.cells.set(baseCellId, updatedCells[baseCellId]);
-    const dependents = this.dependencies.get(baseCellId) || new Set<string>();
-    dependents.forEach((dependentCellId) => {
-      const dependentCellValue = this.evaluateCell(dependentCellId);
-      this.cells.set(dependentCellId, dependentCellValue);
-    });
-  }
-
-  private evaluateCell(cellId: string): number {
-    const cellValue = this.cells.get(cellId) || 0;
-    const ast = parse(cellValue.toString());
-    const baseCellRef = CellRef.parse(cellId);
-    return this.evaluateAST(ast, baseCellRef).value;
-  }
-
-  private isCircularReference(baseCellRef: CellRef, targetCell: Ast): boolean {
-    const stack: string[] = [];
-    const targetCellId = targetCell.toText(baseCellRef);
-
-    const dfs = (cellRef: CellRef): boolean => {
-      const cellId = cellRef.toText();
-      if (cellId === targetCellId) {
-        return true; // Circular reference detected
-      }
-      if (stack.includes(cellId)) {
-        return false; // Not a circular reference in this path
-      }
-      stack.push(cellId);
-      const dependencies = this.dependencies.get(cellId);
-      if (dependencies) {
-        for (const dependency of dependencies) {
-          const dependentCellRef = CellRef.parse(dependency);
-          if (dfs(dependentCellRef)) {
-            return true; // Circular reference detected in a dependent cell
-          }
-        }
-      }
-      stack.pop();
-      return false;
-    };
-
-    return dfs(baseCellRef);
-  }
-
-  // Additional methods (if needed)
-}
-
-// Additional classes and/or functions (if needed)
-
 const FNS = {
   '+': (a: number, b: number): number => a + b,
   '-': (a: number, b?: number): number => (b === undefined ? -a : a - b),
@@ -116,7 +10,98 @@ const FNS = {
   max: (a: number, b: number): number => Math.max(a, b),
 };
 
-interface EvaluationResult {
-  value: number;
-  updatedCells: Updates;
+type Updates = { [cellId: string]: number };
+
+export class Spreadsheet {
+  readonly name: string;
+  private cells: { [cellId: string]: Ast | null } = {}; // Map cellId to its AST representation
+
+  constructor(name: string) {
+    this.name = name;
+  }
+
+  /** Set cell with id cellId to result of evaluating formula
+   *  specified by the string expr.  Update all cells which are
+   *  directly or indirectly dependent on the base cell cellId.
+   *  Return an object mapping the id's of all updated cells to
+   *  their updated values.
+   *
+   *  Errors must be reported by returning an error Result having its
+   *  code options property set to `SYNTAX` for a syntax error and
+   *  `CIRCULAR_REF` for a circular reference and message property set
+   *  to a suitable error message.
+   */
+  async eval(cellId: string, expr: string): Promise<Result<Updates>> {
+    try {
+      const ast = parse(expr); // Parse the expression string into an AST
+      this.cells[cellId] = ast; // Store the AST for the given cellId
+      const updatedCells: Updates = {}; // Map to store updated cell values
+
+      // Evaluate the AST of the current cell and its dependencies
+      this.evaluateCell(cellId, updatedCells);
+
+      return okResult(updatedCells);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        return errResult({ code: 'SYNTAX', message: error.message });
+      } else {
+        return errResult({ code: 'CIRCULAR_REF', message: 'Circular reference detected' });
+      }
+    }
+  }
+
+  private evaluateCell(cellId: string, updatedCells: Updates): number {
+    // If the cell is already evaluated, return its value
+    if (cellId in updatedCells) {
+      return updatedCells[cellId];
+    }
+
+    // If the cell has a circular reference, throw an error
+    if (cellId in this.cells && this.cells[cellId] === null) {
+      throw new Error('Circular reference detected');
+    }
+
+    // Mark the current cell as being evaluated to detect circular references
+    this.cells[cellId] = null;
+
+    const ast = this.cells[cellId]; // Get the AST for the current cell
+
+    // Evaluate the AST based on the node type
+    let value: number;
+    if (ast && ast.type === 'number') {
+      value = ast.value; // Numeric value
+    } else if (ast && ast.type === 'ref') {
+      value = this.evaluateCell(ast.id, updatedCells); // Reference to another cell
+    } else if (ast && ast.type === 'binop') {
+      const left = this.evaluateCell(ast.left, updatedCells); // Evaluate the left operand
+      const right = this.evaluateCell(ast.right, updatedCells); // Evaluate the right operand
+
+      // Check if the operator is a valid function
+      if (!(ast.op in FNS)) {
+        throw new Error(`Invalid operator: ${ast.op}`);
+      }
+
+      // Apply the operator function to the operands
+      value = FNS[ast.op](left, right);
+    } else {
+      throw new Error(`Invalid AST: ${ast}`);
+    }
+
+    // Update the value of the current cell
+    updatedCells[cellId] = value;
+
+    return value;
+  }
+}
+
+// Usage example
+const spreadsheet = new Spreadsheet('My Spreadsheet');
+await spreadsheet.eval('A1', '42');
+await spreadsheet.eval('B1', 'A1 * 2');
+const result = await spreadsheet.eval('B1', 'A1 * 2');
+
+if (result.isOk()) {
+  console.log(result.value); // Output: { B1: 84 }
+} else {
+  console.log(result.error.message);
 }
