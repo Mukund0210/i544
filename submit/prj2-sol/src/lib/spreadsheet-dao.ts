@@ -17,12 +17,15 @@ makeSpreadsheetDao(mongodbUrl: string, ssName: string)
   return SpreadsheetDao.make(mongodbUrl, ssName);
 }
 
+
+
 export class SpreadsheetDao {
 
   //TODO: add properties as necessary
   private spreadsheetName: string;
   private db: mongo.Db;
   private collectionName: string;
+  
 
   constructor(db: mongo.Db, collectionName: string, spreadsheetName: string) {
     this.db = db;
@@ -60,19 +63,20 @@ export class SpreadsheetDao {
 
   /** Set cell with id cellId to string expr. */
   /** Set cell with id cellId to string expr. */
-async setCellExpr(cellId: string, expr: string): Promise<Result<undefined>> {
-  try {
-    const collection = this.db.collection(this.collectionName);
-    await collection.updateOne(
-      { _id: { cellId, spreadsheetName: this.spreadsheetName } },
-      { $set: { expression: expr } },
-      { upsert: true }
-    );
-    return okResult(undefined);
-  } catch (error) {
-    return errResult('DB', error.message);
+  async setCellExpr(cellId: string, expr: string): Promise<Result<undefined>> {
+    try {
+      const collection = this.db.collection(this.collectionName);
+      await collection.updateOne(
+        { _id: { cellId, spreadsheetName: this.spreadsheetName } },
+        { $set: { _id: { cellId, spreadsheetName: this.spreadsheetName }, expression: expr } },
+        { upsert: true }
+      );
+      return okResult(undefined);
+    } catch (error) {
+      return errResult('DB', error.message);
+    }
   }
-}
+  
   
 
   /** Return expr for cell cellId; return '' for an empty/unknown cell.
@@ -94,10 +98,20 @@ async query(cellId: string): Promise<Result<string>> {
 }
 
   /** Clear contents of this spreadsheet */
-  async clear() : Promise<Result<undefined>> {
-    //TODO
+/** Clear contents of this spreadsheet */
+/** Clear contents of this spreadsheet */
+/** Clear contents of this spreadsheet */
+async clear(): Promise<Result<undefined>> {
+  try {
+    const collection = this.db.collection(this.collectionName);
+    await collection.deleteMany({ "_id.spreadsheetName": this.spreadsheetName });
     return okResult(undefined);
+  } catch (error) {
+    return errResult('DB', error.message);
   }
+}
+
+
 
   /** Remove all info for cellId from this spreadsheet. */
 /** Remove all info for cellId from this spreadsheet. */
@@ -124,14 +138,13 @@ async remove(cellId: string): Promise<Result<undefined>> {
 async getData(): Promise<Result<[string, string][]>> {
   try {
     const collection = this.db.collection(this.collectionName);
-    const documents = await collection.find({ spreadsheetName: this.spreadsheetName }).toArray();
-
+    const documents = await collection.find({}).toArray();
     const data: [string, string][] = [];
 
     for (const document of documents) {
-      const cellId = document._id.toString(); // Access cellId using toString() method
-      const expr = document.expression || '';
-      data.push([cellId, expr]);
+      const cellId = document._id.toString();
+      const expression = document.expression || '';
+      data.push([cellId, expression]);
     }
 
     return okResult(data);
@@ -141,8 +154,5 @@ async getData(): Promise<Result<[string, string][]>> {
 }
 
 
+
 }
-
-
-
-
