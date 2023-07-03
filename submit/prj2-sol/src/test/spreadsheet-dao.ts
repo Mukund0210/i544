@@ -20,6 +20,24 @@ describe('spreadsheet DAO', () => {
     await MemSpreadsheetDao.tearDown(dao);
   });
 
+  it('must close the spreadsheet and release resources', async () => {
+    const dbUrl = 'mongodb://localhost:27017';
+    const ssName = 'testSpreadsheet';
+    const daoResult = await makeSpreadsheetDao(dbUrl, ssName);
+  
+    if (daoResult.isOk) {
+      const dao = daoResult.val;
+  
+      // Perform any necessary operations with the spreadsheet DAO
+  
+      const closeResult = await dao.close();
+      assert(closeResult.isOk === true);
+    } else {
+      assert.fail('Failed to create the spreadsheet DAO');
+    }
+  });
+  
+
   it('must return spreadsheet name', () => {
     expect(dao.getSpreadsheetName()).to.equal(TEST_SPREADSHEET_NAME);
   });

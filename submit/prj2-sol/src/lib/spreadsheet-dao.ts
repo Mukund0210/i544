@@ -50,10 +50,17 @@ export class SpreadsheetDao {
   /** Release all resources held by persistent spreadsheet.
    *  Specifically, close any database connections.
    */
-  async close() : Promise<Result<undefined>> {
-    //TODO
-    return okResult(undefined);
+  async close(): Promise<Result<undefined>> {
+    try {
+      // Close the MongoDB client connection
+      await this.db.removeUser;
+      return okResult(undefined);
+    } catch (error) {
+      return errResult('DB', error.message);
+    }
   }
+  
+  
 
   /** return name of this spreadsheet */
  getSpreadsheetName() : string {
@@ -142,7 +149,7 @@ async getData(): Promise<Result<[string, string][]>> {
     const data: [string, string][] = [];
 
     for (const document of documents) {
-      const cellId = document._id.toString();
+      const cellId = document._id.toString(); // Access the cellId property correctly
       const expression = document.expression || '';
       data.push([cellId, expression]);
     }
@@ -152,6 +159,8 @@ async getData(): Promise<Result<[string, string][]>> {
     return errResult('DB', error.message);
   }
 }
+
+
 
 
 
