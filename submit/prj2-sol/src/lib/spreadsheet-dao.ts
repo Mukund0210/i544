@@ -10,19 +10,32 @@ import * as mongo from 'mongodb';
  */
 
 /** return a DAO for spreadsheet ssName at URL mongodbUrl */
-export async function
-makeSpreadsheetDao(mongodbUrl: string, ssName: string)
-  : Promise<Result<SpreadsheetDao>> 
-{
-  return SpreadsheetDao.make(mongodbUrl, ssName);
+export async function makeSpreadsheetDao(mongodbUrl: string, ssName: string): Promise<Result<SpreadsheetDao>> {
+  try {
+    if (!mongodbUrl.startsWith('mongodb://') && !mongodbUrl.startsWith('mongodb+srv://')) {
+      throw {
+        code: 'DB',
+        message: 'DB',
+      };
+    }
+    const client = await mongo.MongoClient.connect(mongodbUrl);
+    const db = client.db();
+    const collectionName = `spreadsheet_${ssName}`;
+    const dao = new SpreadsheetDao(db, collectionName, ssName);
+    dao.spreadsheetName = ssName; // Set the spreadsheet name
+    return okResult(dao);
+  } catch (error) {
+    return errResult('DB', error.message);
+  }
 }
+
 
 
 
 export class SpreadsheetDao {
 
   //TODO: add properties as necessary
-  private spreadsheetName: string;
+  public spreadsheetName: string;
   private db: mongo.Db;
   private collectionName: string;
   
@@ -136,19 +149,17 @@ async remove(cellId: string): Promise<Result<undefined>> {
   }
 }
 
-  /** Return array of [ cellId, expr ] pairs for all cells in this
-   *  spreadsheet
-   */
-  async getData(): Promise<Result<[string, string][]>> {
-    try {
-      const collection = this.db.collection(this.collectionName);
-      const data = await collection.find().toArray();
-      const cellData: [string, string][] = data.map((doc: any) => [doc._id.cellId, doc.expression]);
-      return okResult(cellData);
-    } catch (error) {
-      return errResult('DB', error.message);
-    }
+async getData(): Promise<Result<[string, string][]>> {
+  try {
+    const collection = this.db.collection(this.collectionName);
+    const data = await collection.find().toArray();
+    const cellData: [string, string][] = data.map((doc: any) => [doc._id.cellId, doc.expression]);
+    return okResult(cellData);
+  } catch (error) {
+    return errResult('DB', error.message);
   }
+}
+
   
   
 
