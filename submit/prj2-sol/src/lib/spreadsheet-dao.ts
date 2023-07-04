@@ -69,7 +69,6 @@ export class SpreadsheetDao {
   }
 
   /** Set cell with id cellId to string expr. */
-  /** Set cell with id cellId to string expr. */
   async setCellExpr(cellId: string, expr: string): Promise<Result<undefined>> {
     try {
       const collection = this.db.collection(this.collectionName);
@@ -140,28 +139,18 @@ async remove(cellId: string): Promise<Result<undefined>> {
   /** Return array of [ cellId, expr ] pairs for all cells in this
    *  spreadsheet
    */
-/** Return array of [ cellId, expr ] pairs for all cells in this spreadsheet */
-/** Return array of [ cellId, expr ] pairs for all cells in this spreadsheet */
-async getData(): Promise<Result<[string, string][]>> {
-  try {
-    const collection = this.db.collection(this.collectionName);
-    const documents = await collection.find({}).toArray();
-    const data: [string, string][] = [];
-
-    for (const document of documents) {
-      const cellId = document._id.toString(); // Access the cellId property correctly
-      const expression = document.expression || '';
-      data.push([cellId, expression]);
+  async getData(): Promise<Result<[string, string][]>> {
+    try {
+      const collection = this.db.collection(this.collectionName);
+      const data = await collection.find().toArray();
+      const cellData: [string, string][] = data.map((doc: any) => [doc._id.cellId, doc.expression]);
+      return okResult(cellData);
+    } catch (error) {
+      return errResult('DB', error.message);
     }
-
-    return okResult(data);
-  } catch (error) {
-    return errResult('DB', error.message);
   }
-}
-
-
-
+  
+  
 
 
 }
