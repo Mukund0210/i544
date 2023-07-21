@@ -45,7 +45,7 @@ function setupRoutes(app: Express.Application) {
   app.get(`${base}/:ssName/:cellId`, getCellHandler);
   app.patch(`${base}/:ssName/:cellId`, setCellHandler);
   // app.patch(`${base}/:ssName/:cellId/copy`, copyCellHandler);
-  app.patch('/api/:SS_NAME/:CELL_ID', copyCellHandler(app));
+  app.patch(`${base}/:ssName/:cellId`, copyCellHandler);
   app.delete(`${base}/:ssName/:cellId`, deleteCellHandler);
   app.delete(`${base}/:ssName`, clearSpreadsheetHandler);
   app.put(`${base}/:ssName`, loadSpreadsheetHandler);
